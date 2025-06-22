@@ -5,14 +5,14 @@ import (
 	"os"
 )
 
-type RunConfig struct {
+type ServerConfig struct {
 	RunAddress string `env:"RUN_ADDRESS"`
 	DbURL      string `env:"DATABASE_URL"`
 	AccSysAddr string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 }
 
-func Load() *RunConfig {
-	cfg := &RunConfig{}
+func Load() *ServerConfig {
+	cfg := &ServerConfig{}
 	flag.StringVar(&cfg.RunAddress, "a", "localhost:8080", "address and port to run server")
 	flag.StringVar(&cfg.DbURL, "d", "", "host=<host> user=<user> password=<password> dbname=<dbname> sslmode=<disable/enable>")
 	flag.StringVar(&cfg.AccSysAddr, "r", "", "accrual system address ")
