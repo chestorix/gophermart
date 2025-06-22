@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"time"
 )
 
@@ -45,4 +46,8 @@ func createTables(db *sql.DB) error {
 		);
 	`)
 	return err
+}
+
+func (p *Postgres) Test() string {
+	return "test"
 }

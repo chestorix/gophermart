@@ -10,6 +10,6 @@ func NewService(repo interfaces.Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) Test() {
-	s.repo.Test()
+func (s *Service) Test() string {
+	return s.repo.Test()
 }

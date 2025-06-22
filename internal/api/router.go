@@ -20,6 +20,6 @@ func NewRouter(logger *logrus.Logger) *Router {
 }
 func (r *Router) SetupRoutes(handler *Handler) {
 	r.Route("/", func(r chi.Router) {
-		r.Get("/", Handler.GetTest)
+		r.Get("/", handler.GetTest)
 	})
 }
