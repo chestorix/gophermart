@@ -22,7 +22,7 @@ const (
 
 type Order struct {
 	Number     string
-	UserId     string
+	UserID     string
 	Status     OrderStatus
 	Accrual    float64
 	UploadedAt time.Time
