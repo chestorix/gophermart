@@ -19,7 +19,6 @@ func NewHandler(service interfaces.Service, dbURL string) *Handler {
 
 func (h *Handler) GetTest(w http.ResponseWriter, r *http.Request) {
 	test := h.service.Test()
-	fmt.Println("test", test)
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, test)
 }
