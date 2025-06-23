@@ -77,7 +77,7 @@ func (p *Postgres) CreateUser(ctx context.Context, user models.User) error {
 	return nil
 }
 
-func (p *Postgres) GetByLogin(ctx context.Context, login string) (models.User, error) {
+func (p *Postgres) GetUserByLogin(ctx context.Context, login string) (models.User, error) {
 	query := `SELECT id, login, password_hash, created_at FROM users WHERE login = $1`
 	var user models.User
 	err := p.db.QueryRowContext(ctx, query, login).Scan(
@@ -242,4 +242,5 @@ func (p *Postgres) GetUserBalance(ctx context.Context, userID string) (current, 
 	}
 
 	return current - withdrawn, withdrawn, nil
+
 }
