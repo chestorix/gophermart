@@ -5,19 +5,29 @@ import (
 	"errors"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
+	"time"
 )
 
 var (
-	ErrUserAlreadyExists  = errors.New("user already exists")
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserAlreadyExists                 = errors.New("user already exists")
+	ErrInvalidCredentials                = errors.New("invalid credentials")
+	ErrOrderAlreadyUploadedByUser        = errors.New("order already uploaded by user")
+	ErrOrderAlreadyUploadedByAnotherUser = errors.New("order already uploaded by another user")
+	ErrInvalidOrderNumber                = errors.New("invalid order number")
+	ErrInsufficientFunds                 = errors.New("insufficient funds")
 )
 
 type Service struct {
-	repo interfaces.Repository
+	repo      interfaces.Repository
+	logger    *logrus.Logger
+	jwtSecret string
 }
 
-func NewService(repo interfaces.Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo interfaces.Repository, logger *logrus.Logger, jwtSecret string) *Service {
+	return &Service{repo: repo, logger: logger}
 }
 
 func (s *Service) Register(ctx context.Context, login, password string) (string, error) {
@@ -27,23 +37,21 @@ func (s *Service) Register(ctx context.Context, login, password string) (string,
 		return "", ErrUserAlreadyExists
 	}
 
-	hashedPassword, err := uc.authService.HashPassword(password)
+	hashedPassword, err := s.hashPassword(password)
 	if err != nil {
 		return "", err
 	}
 
-	// Создание пользователя
 	user := models.User{
 		Login:        login,
 		PasswordHash: hashedPassword,
 	}
 
-	if err := uc.userRepo.Create(ctx, user); err != nil {
+	if err := s.repo.CreateUser(ctx, user); err != nil {
 		return "", err
 	}
 
-	// Генерация токена
-	token, err := uc.authService.GenerateToken(login)
+	token, err := s.generateToken(login)
 	if err != nil {
 		return "", err
 	}
@@ -86,4 +94,18 @@ func (s *Service) GetWithdrawalsByUserID(ctx context.Context, userID int) ([]mod
 
 func (s *Service) GetUserBalance(ctx context.Context, userID string) (current, withdrawn float64, err error) {
 	return s.repo.GetUserBalance(ctx, userID)
+}
+
+func (s *Service) hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
+}
+
+func (s *Service) generateToken(login string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"login": login,
+		"exp":   time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	return token.SignedString([]byte(s.jwtSecret))
 }

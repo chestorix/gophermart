@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	jwtSecret := "test"
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
 	logger.SetLevel(logrus.InfoLevel)
@@ -18,7 +19,7 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	service := service.NewService(storage)
+	service := service.NewService(storage, logger, jwtSecret)
 	server := api.NewServer(cfg, service, logger)
 	if err := server.Start(); err != nil {
 		logger.WithError(err).Fatal("Server failed")

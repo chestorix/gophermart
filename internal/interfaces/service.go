@@ -7,6 +7,7 @@ import (
 
 type Service interface {
 	Test() string
+	Register(ctx context.Context, login, password string) (string, error)
 	CreateUser(ctx context.Context, user models.User) error
 	GetUserByLogin(ctx context.Context, login string) (models.User, error)
 

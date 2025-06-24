@@ -4,17 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chestorix/gophermart/internal/interfaces"
+	"github.com/chestorix/gophermart/internal/service"
+	"github.com/sirupsen/logrus"
 	"net/http"
 )
 
 type Handler struct {
 	service interfaces.Service
+	logger  *logrus.Logger
 	dbURL   string
 }
 
-func NewHandler(service interfaces.Service, dbURL string) *Handler {
+func NewHandler(service interfaces.Service, logger *logrus.Logger, dbURL string) *Handler {
 	return &Handler{service: service,
-		dbURL: dbURL,
+		logger: logger,
+		dbURL:  dbURL,
 	}
 }
 
@@ -29,10 +33,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Login    string `json:"login"`
 		Password string `json:"password"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request format", http.StatusBadRequest)
 		return
 	}
+	if req.Login == "" || req.Password == "" {
+		http.Error(w, "invalid request format", http.StatusBadRequest)
+		return
+	}
+
 	token, err := h.service.Register(r.Context(), req.Login, req.Password)
 	if err != nil {
 		switch err {
@@ -44,4 +54,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
+	w.Header().Set("Authorization", "Bearer "+token)
+	w.WriteHeader(http.StatusOK)
 }

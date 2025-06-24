@@ -21,5 +21,6 @@ func NewRouter(logger *logrus.Logger) *Router {
 func (r *Router) SetupRoutes(handler *Handler) {
 	r.Route("/", func(r chi.Router) {
 		r.Get("/", handler.GetTest)
+		r.Post("/api/user/register", handler.Register)
 	})
 }
