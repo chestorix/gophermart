@@ -9,6 +9,10 @@ type Service interface {
 	Test() string
 
 	Register(ctx context.Context, login, password string) (string, error)
+	Login(ctx context.Context, login, password string) (string, error)
+	ValidateToken(tokenString string) (string, error)
+	UploadOrder(ctx context.Context, userID, orderNumber string) error
+
 	CreateUser(ctx context.Context, user models.User) error
 	GetUserByLogin(ctx context.Context, login string) (models.User, error)
 
