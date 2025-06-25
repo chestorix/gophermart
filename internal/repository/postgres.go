@@ -244,3 +244,36 @@ func (p *Postgres) GetUserBalance(ctx context.Context, userID int) (current, wit
 	return current - withdrawn, withdrawn, nil
 
 }
+
+func (r *Postgres) GetOrdersToProcess(ctx context.Context, limit int) ([]models.Order, error) {
+	query := `
+		SELECT number, user_id, status, accrual, uploaded_at
+		FROM orders
+		WHERE status IN ('NEW', 'PROCESSING')
+		ORDER BY uploaded_at ASC
+		LIMIT $1
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []models.Order
+	for rows.Next() {
+		var order models.Order
+		if err := rows.Scan(
+			&order.Number,
+			&order.UserID,
+			&order.Status,
+			&order.Accrual,
+			&order.UploadedAt,
+		); err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, rows.Err()
+}

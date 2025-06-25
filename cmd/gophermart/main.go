@@ -1,11 +1,18 @@
 package main
 
 import (
+	"context"
 	"github.com/chestorix/gophermart/internal/api"
 	"github.com/chestorix/gophermart/internal/config"
 	"github.com/chestorix/gophermart/internal/repository"
 	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 func main() {
@@ -19,10 +26,41 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-	service := service.NewService(storage, logger, jwtSecret)
+	service := service.NewService(storage, logger, jwtSecret, cfg.AccSysAddr)
 	server := api.NewServer(cfg, service, logger)
-	if err := server.Start(); err != nil {
-		logger.WithError(err).Fatal("Server failed")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := service.ProcessOrders(context.Background()); err != nil {
+					logger.Errorf("order processing failed: %v", err)
+				}
+			case <-ctx.Done(): // ← Остановка при завершении программы
+				return
+			}
+		}
+	}()
+
+	go func() {
+		if err := server.Start(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Info("Shutting down server...")
+
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
+	logger.Info("Server exiting")
 }

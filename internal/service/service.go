@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
+	"net/http"
 	"time"
 )
 
@@ -18,16 +21,31 @@ var (
 	ErrOrderAlreadyUploadedByAnotherUser = errors.New("order already uploaded by another user")
 	ErrInvalidOrderNumber                = errors.New("invalid order number")
 	ErrInsufficientFunds                 = errors.New("insufficient funds")
+	ErrOrderNotRegistered                = errors.New("order not registered")
 )
 
 type Service struct {
-	repo      interfaces.Repository
-	logger    *logrus.Logger
-	jwtSecret string
+	httpClient *http.Client
+	repo       interfaces.Repository
+	logger     *logrus.Logger
+	jwtSecret  string
+	accSysAddr string
 }
 
-func NewService(repo interfaces.Repository, logger *logrus.Logger, jwtSecret string) *Service {
-	return &Service{repo: repo, logger: logger}
+type AccrualResponse struct {
+	Order   string               `json:"order"`
+	Status  models.AccrualStatus `json:"status"`
+	Accrual float64              `json:"accrual,omitempty"`
+}
+
+func NewService(repo interfaces.Repository, logger *logrus.Logger, jwtSecret string, AccSysAddr string) *Service {
+	return &Service{
+		httpClient: &http.Client{},
+		repo:       repo,
+		logger:     logger,
+		jwtSecret:  jwtSecret,
+		accSysAddr: AccSysAddr,
+	}
 }
 
 func (s *Service) Register(ctx context.Context, login, password string) (string, error) {
@@ -196,6 +214,70 @@ func (s *Service) Withdraw(ctx context.Context, userID int, orderNumber string, 
 	}
 
 	return s.repo.CreateWithdrawal(ctx, withdrawal)
+}
+
+func (s *Service) GetUserWithdrawals(ctx context.Context, userID int) ([]models.Withdrawal, error) {
+	return s.repo.GetWithdrawalsByUserID(ctx, userID)
+}
+
+func (s *Service) ProcessOrders(ctx context.Context) error {
+	orders, err := s.repo.GetOrdersToProcess(ctx, 10)
+	if err != nil {
+		return err
+	}
+
+	for _, order := range orders {
+		accrualResp, err := s.GetAccrual(ctx, order.Number)
+		if err != nil {
+			s.logger.Errorf("failed to get accrual for order %s: %v", order.Number, err)
+			continue
+		}
+
+		switch accrualResp.Status {
+		case "PROCESSED":
+			order.Status = "PROCESSED"
+			order.Accrual = accrualResp.Accrual
+		case "INVALID":
+			order.Status = "INVALID"
+		}
+
+		if err := s.repo.UpdateOrder(ctx, order); err != nil {
+			s.logger.Errorf("failed to update order %s: %v", order.Number, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) GetAccrual(ctx context.Context, orderNumber string) (AccrualResponse, error) {
+	url := fmt.Sprintf("%s/api/orders/%s", s.accSysAddr, orderNumber)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return AccrualResponse{}, err
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return AccrualResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var accrualResp AccrualResponse
+		if err := json.NewDecoder(resp.Body).Decode(&accrualResp); err != nil {
+			return AccrualResponse{}, err
+		}
+		return accrualResp, nil
+	case http.StatusNoContent:
+		return AccrualResponse{}, ErrOrderNotRegistered
+	case http.StatusTooManyRequests:
+		retryAfter := resp.Header.Get("Retry-After")
+		return AccrualResponse{}, fmt.Errorf("rate limit exceeded, retry after %s", retryAfter)
+	default:
+		return AccrualResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 }
 
 func isValidLuhn(number string) bool {

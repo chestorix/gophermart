@@ -212,3 +212,39 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }
+func (h *Handler) GetUserWithdrawals(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+
+	withdrawals, err := h.service.GetUserWithdrawals(r.Context(), userID)
+	if err != nil {
+		h.logger.Errorf("get user withdrawals failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(withdrawals) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	type withdrawalResponse struct {
+		Order       string    `json:"order"`
+		Sum         float64   `json:"sum"`
+		ProcessedAt time.Time `json:"processed_at"`
+	}
+
+	response := make([]withdrawalResponse, 0, len(withdrawals))
+	for _, w := range withdrawals {
+		response = append(response, withdrawalResponse{
+			Order:       w.Order,
+			Sum:         w.Sum,
+			ProcessedAt: w.ProcessedAt,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Errorf("encode response failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}

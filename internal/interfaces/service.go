@@ -24,6 +24,7 @@ type Service interface {
 
 	CreateWithdrawal(ctx context.Context, withdrawal models.Withdrawal) error
 	Withdraw(ctx context.Context, userID int, orderNumber string, sum float64) error
+	GetUserWithdrawals(ctx context.Context, userID int) ([]models.Withdrawal, error)
 	GetWithdrawalsByUserID(ctx context.Context, userID int) ([]models.Withdrawal, error)
 	GetUserBalance(ctx context.Context, userID int) (current, withdrawn float64, err error)
 }

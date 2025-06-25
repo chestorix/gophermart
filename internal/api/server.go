@@ -18,6 +18,7 @@ type Server struct {
 
 func NewServer(cfg *config.ServerConfig, service interfaces.Service, logger *logrus.Logger) *Server {
 	return &Server{
+		server:  &http.Server{},
 		cfg:     cfg,
 		service: service,
 		router:  NewRouter(logger),
