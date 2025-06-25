@@ -17,14 +17,20 @@ func Auth(authService interfaces.Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			userID, err := authService.ValidateToken(token)
-			fmt.Println(userID)
+			login, err := authService.ValidateToken(token)
+			fmt.Println(login)
 			if err != nil {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), "userID", userID)
+			user, err := authService.GetUserByLogin(r.Context(), login)
+			if err != nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), "userID", user.ID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

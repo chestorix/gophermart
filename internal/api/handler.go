@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chestorix/gophermart/internal/interfaces"
+	"github.com/chestorix/gophermart/internal/models"
 	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
+	"time"
 )
 
 type Handler struct {
@@ -92,7 +94,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	if r.Header.Get("Content-Type") != "text/plain" {
+		http.Error(w, "invalid request format", http.StatusBadRequest)
+	}
+	userID := r.Context().Value("userID").(int)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -119,6 +124,41 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		h.logger.Errorf("upload order failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+	orders, err := h.service.GetUserOrders(r.Context(), userID)
+	if err != nil {
+		h.logger.Errorf("get user orders failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if len(orders) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	type orderResponse struct {
+		Number     string             `json:"number"`
+		Status     models.OrderStatus `json:"status"`
+		Accrual    float64            `json:"accrual,omitempty"`
+		UploadedAt time.Time          `json:"uploaded_at"`
+	}
+
+	response := make([]orderResponse, 0, len(orders))
+	for _, order := range orders {
+		response = append(response, orderResponse{
+			Number:     order.Number,
+			Status:     order.Status,
+			Accrual:    order.Accrual,
+			UploadedAt: order.UploadedAt,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Errorf("encode response failed: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }

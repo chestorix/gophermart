@@ -149,7 +149,7 @@ func (s *Service) ValidateToken(tokenString string) (string, error) {
 	return "", errors.New("invalid token")
 }
 
-func (s *Service) UploadOrder(ctx context.Context, userID, orderNumber string) error {
+func (s *Service) UploadOrder(ctx context.Context, userID int, orderNumber string) error {
 	if !isValidLuhn(orderNumber) {
 		return ErrInvalidOrderNumber
 	}
@@ -170,6 +170,10 @@ func (s *Service) UploadOrder(ctx context.Context, userID, orderNumber string) e
 	}
 
 	return s.repo.CreateOrder(ctx, order)
+}
+
+func (s *Service) GetUserOrders(ctx context.Context, userID int) ([]models.Order, error) {
+	return s.repo.GetOrdersByUserID(ctx, userID)
 }
 
 func isValidLuhn(number string) bool {
