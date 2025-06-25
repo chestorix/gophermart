@@ -104,7 +104,7 @@ func (s *Service) GetWithdrawalsByUserID(ctx context.Context, userID int) ([]mod
 	return s.repo.GetWithdrawalsByUserID(ctx, userID)
 }
 
-func (s *Service) GetUserBalance(ctx context.Context, userID string) (current, withdrawn float64, err error) {
+func (s *Service) GetUserBalance(ctx context.Context, userID int) (current, withdrawn float64, err error) {
 	return s.repo.GetUserBalance(ctx, userID)
 }
 
@@ -118,7 +118,6 @@ func (s *Service) generateToken(login string) (string, error) {
 		"login": login,
 		"exp":   time.Now().Add(time.Hour * 24).Unix(),
 	})
-
 	return token.SignedString([]byte(s.jwtSecret))
 }
 
@@ -174,6 +173,29 @@ func (s *Service) UploadOrder(ctx context.Context, userID int, orderNumber strin
 
 func (s *Service) GetUserOrders(ctx context.Context, userID int) ([]models.Order, error) {
 	return s.repo.GetOrdersByUserID(ctx, userID)
+}
+
+func (s *Service) Withdraw(ctx context.Context, userID int, orderNumber string, sum float64) error {
+	current, _, err := s.repo.GetUserBalance(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if current < sum {
+		return ErrInsufficientFunds
+	}
+
+	if !isValidLuhn(orderNumber) {
+		return ErrInvalidOrderNumber
+	}
+
+	withdrawal := models.Withdrawal{
+		Order:  orderNumber,
+		UserID: userID,
+		Sum:    sum,
+	}
+
+	return s.repo.CreateWithdrawal(ctx, withdrawal)
 }
 
 func isValidLuhn(number string) bool {

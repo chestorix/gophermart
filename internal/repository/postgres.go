@@ -221,7 +221,7 @@ func (p *Postgres) GetWithdrawalsByUserID(ctx context.Context, userID int) ([]mo
 	return withdrawals, nil
 }
 
-func (p *Postgres) GetUserBalance(ctx context.Context, userID string) (current, withdrawn float64, err error) {
+func (p *Postgres) GetUserBalance(ctx context.Context, userID int) (current, withdrawn float64, err error) {
 	queryCurrent := `
 		SELECT COALESCE(SUM(accrual), 0)
 		FROM orders 

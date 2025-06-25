@@ -4,7 +4,7 @@ import "time"
 
 type Withdrawal struct {
 	Order       string
-	UserID      string
+	UserID      int
 	Sum         float64
 	ProcessedAt time.Time
 }

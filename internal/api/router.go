@@ -39,8 +39,8 @@ func (r *Router) SetupRoutes(handler *Handler) {
 
 		r.Post("/api/user/orders", handler.UploadOrder)
 		r.Get("/api/user/orders", handler.GetUserOrders)
-		//	r.Get("/api/user/balance", handler.GetBalance)
-		//	r.Post("/api/user/balance/withdraw", handler.Withdraw)
+		r.Get("/api/user/balance", handler.GetUserBalance)
+		r.Post("/api/user/balance/withdraw", handler.Withdraw)
 		//	r.Get("/api/user/withdrawals", handler.GetWithdrawals)
 	})
 }

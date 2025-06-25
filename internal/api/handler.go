@@ -162,3 +162,53 @@ func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }
+
+func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+	current, withdrawn, err := h.service.GetUserBalance(r.Context(), userID)
+	if err != nil {
+		h.logger.Errorf("get user balance failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	response := struct {
+		Current   float64 `json:"current"`
+		Withdrawn float64 `json:"withdrawn"`
+	}{
+		Current:   current,
+		Withdrawn: withdrawn,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Errorf("encode response failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(int)
+
+	var req struct {
+		Order string  `json:"order"`
+		Sum   float64 `json:"sum"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	err := h.service.Withdraw(r.Context(), userID, req.Order, req.Sum)
+	switch err {
+	case nil:
+		w.WriteHeader(http.StatusOK)
+	case service.ErrInsufficientFunds:
+		http.Error(w, err.Error(), http.StatusPaymentRequired)
+	case service.ErrInvalidOrderNumber:
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+	default:
+		h.logger.Errorf("withdraw failed: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
