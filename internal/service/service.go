@@ -93,77 +93,12 @@ func (s *Service) Test() string {
 	return s.repo.Test()
 }
 
-func (s *Service) CreateUser(ctx context.Context, user models.User) error {
-	return s.repo.CreateUser(ctx, user)
-}
-
 func (s *Service) GetUserByLogin(ctx context.Context, login string) (models.User, error) {
 	return s.repo.GetUserByLogin(ctx, login)
 }
 
-func (s *Service) CreateOrder(ctx context.Context, order models.Order) error {
-	return s.repo.CreateOrder(ctx, order)
-}
-
-func (s *Service) GetOrderByNumber(ctx context.Context, number string) (models.Order, error) {
-	return s.repo.GetOrderByNumber(ctx, number)
-}
-func (s *Service) GetOrdersByUserID(ctx context.Context, userID int) ([]models.Order, error) {
-	return s.repo.GetOrdersByUserID(ctx, userID)
-}
-
-func (s *Service) UpdateOrder(ctx context.Context, order models.Order) error {
-	return s.repo.UpdateOrder(ctx, order)
-}
-func (s *Service) CreateWithdrawal(ctx context.Context, withdrawal models.Withdrawal) error {
-	return s.repo.CreateWithdrawal(ctx, withdrawal)
-}
-func (s *Service) GetWithdrawalsByUserID(ctx context.Context, userID int) ([]models.Withdrawal, error) {
-	return s.repo.GetWithdrawalsByUserID(ctx, userID)
-}
-
 func (s *Service) GetUserBalance(ctx context.Context, userID int) (current, withdrawn float64, err error) {
 	return s.repo.GetUserBalance(ctx, userID)
-}
-
-func (s *Service) hashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-func (s *Service) generateToken(login string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"login": login,
-		"exp":   time.Now().Add(time.Hour * 24).Unix(),
-	})
-	return token.SignedString([]byte(s.jwtSecret))
-}
-
-func (s *Service) comparePassword(hashedPassword, password string) error {
-	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
-}
-
-func (s *Service) ValidateToken(tokenString string) (string, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return []byte(s.jwtSecret), nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		login, ok := claims["login"].(string)
-		if !ok {
-			return "", errors.New("invalid token claims")
-		}
-		return login, nil
-	}
-
-	return "", errors.New("invalid token")
 }
 
 func (s *Service) UploadOrder(ctx context.Context, userID int, orderNumber string) error {
@@ -182,7 +117,7 @@ func (s *Service) UploadOrder(ctx context.Context, userID int, orderNumber strin
 	order := models.Order{
 		Number:  orderNumber,
 		UserID:  userID,
-		Status:  "NEW",
+		Status:  models.OrderStatusNew,
 		Accrual: 0,
 	}
 
@@ -234,11 +169,18 @@ func (s *Service) ProcessOrders(ctx context.Context) error {
 		}
 
 		switch accrualResp.Status {
-		case "PROCESSED":
-			order.Status = "PROCESSED"
+		case models.AccrualStatusRegistered:
+			order.Status = models.OrderStatusNew
 			order.Accrual = accrualResp.Accrual
-		case "INVALID":
-			order.Status = "INVALID"
+		case models.AccrualStatusProcessing:
+			order.Status = models.OrderStatusProcessing
+			order.Accrual = accrualResp.Accrual
+		case models.AccrualStatusProcessed:
+			order.Status = models.OrderStatusProcessed
+			order.Accrual = accrualResp.Accrual
+		case models.AccrualStatusInvalid:
+			order.Status = models.OrderStatusInvalid
+			order.Accrual = accrualResp.Accrual
 		}
 
 		if err := s.repo.UpdateOrder(ctx, order); err != nil {
@@ -258,6 +200,7 @@ func (s *Service) GetAccrual(ctx context.Context, orderNumber string) (AccrualRe
 	}
 
 	resp, err := s.httpClient.Do(req)
+	s.logger.Infoln(url)
 	if err != nil {
 		return AccrualResponse{}, err
 	}
@@ -278,6 +221,46 @@ func (s *Service) GetAccrual(ctx context.Context, orderNumber string) (AccrualRe
 	default:
 		return AccrualResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
+}
+
+func (s *Service) hashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(bytes), err
+}
+
+func (s *Service) generateToken(login string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"login": login,
+		"exp":   time.Now().Add(time.Hour * 24).Unix(),
+	})
+	return token.SignedString([]byte(s.jwtSecret))
+}
+
+func (s *Service) comparePassword(hashedPassword, password string) error {
+	return bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+}
+
+func (s *Service) ValidateToken(tokenString string) (string, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(s.jwtSecret), nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		login, ok := claims["login"].(string)
+		if !ok {
+			return "", errors.New("invalid token claims")
+		}
+		return login, nil
+	}
+
+	return "", errors.New("invalid token")
 }
 
 func isValidLuhn(number string) bool {

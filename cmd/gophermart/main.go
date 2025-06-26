@@ -28,18 +28,18 @@ func main() {
 	}
 	service := service.NewService(storage, logger, jwtSecret, cfg.AccSysAddr)
 	server := api.NewServer(cfg, service, logger)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
+	ctx, cancel := context.WithCancel(context.Background())
 
+	go func() {
+		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				if err := service.ProcessOrders(context.Background()); err != nil {
 					logger.Errorf("order processing failed: %v", err)
 				}
-			case <-ctx.Done(): // ← Остановка при завершении программы
+			case <-ctx.Done():
 				return
 			}
 		}
