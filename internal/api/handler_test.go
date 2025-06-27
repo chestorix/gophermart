@@ -2,398 +2,385 @@ package api
 
 import (
 	"context"
-	"github.com/chestorix/gophermart/internal/config"
-	"github.com/chestorix/gophermart/internal/interfaces"
-	"github.com/go-chi/chi/v5"
+	"github.com/chestorix/gophermart/internal/models"
+	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
+	"io"
 	"net/http"
-	"reflect"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
-func TestHandler_GetTest(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
-			}
-			h.GetTest(tt.args.w, tt.args.r)
-		})
-	}
+type mockService struct {
+	registerFn           func(ctx context.Context, login, password string) (string, error)
+	loginFn              func(ctx context.Context, login, password string) (string, error)
+	uploadOrderFn        func(ctx context.Context, userID int, orderNumber string) error
+	getUserOrdersFn      func(ctx context.Context, userID int) ([]models.Order, error)
+	getUserBalanceFn     func(ctx context.Context, userID int) (current, withdrawn float64, err error)
+	withdrawFn           func(ctx context.Context, userID int, orderNumber string, sum float64) error
+	getUserWithdrawalsFn func(ctx context.Context, userID int) ([]models.Withdrawal, error)
+	validateTokenFn      func(tokenString string) (string, error)
+	getUserByLoginFn     func(ctx context.Context, login string) (models.User, error)
 }
 
-func TestHandler_GetUserBalance(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
-			}
-			h.GetUserBalance(tt.args.w, tt.args.r)
-		})
-	}
+func (m *mockService) Test() string {
+	return "test"
 }
 
-func TestHandler_GetUserOrders(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
-			}
-			h.GetUserOrders(tt.args.w, tt.args.r)
-		})
-	}
+func (m *mockService) Register(ctx context.Context, login, password string) (string, error) {
+	return m.registerFn(ctx, login, password)
 }
 
-func TestHandler_GetUserWithdrawals(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
+func (m *mockService) Login(ctx context.Context, login, password string) (string, error) {
+	return m.loginFn(ctx, login, password)
+}
+
+func (m *mockService) UploadOrder(ctx context.Context, userID int, orderNumber string) error {
+	return m.uploadOrderFn(ctx, userID, orderNumber)
+}
+
+func (m *mockService) GetUserOrders(ctx context.Context, userID int) ([]models.Order, error) {
+	return m.getUserOrdersFn(ctx, userID)
+}
+
+func (m *mockService) GetUserBalance(ctx context.Context, userID int) (current, withdrawn float64, err error) {
+	return m.getUserBalanceFn(ctx, userID)
+}
+
+func (m *mockService) Withdraw(ctx context.Context, userID int, orderNumber string, sum float64) error {
+	return m.withdrawFn(ctx, userID, orderNumber, sum)
+}
+
+func (m *mockService) GetUserWithdrawals(ctx context.Context, userID int) ([]models.Withdrawal, error) {
+	return m.getUserWithdrawalsFn(ctx, userID)
+}
+
+func (m *mockService) ValidateToken(tokenString string) (string, error) {
+	return m.validateTokenFn(tokenString)
+}
+
+func (m *mockService) GetUserByLogin(ctx context.Context, login string) (models.User, error) {
+	return m.getUserByLoginFn(ctx, login)
+}
+
+func TestHandler_Register(t *testing.T) {
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name           string
+		requestBody    string
+		mockRegister   func(ctx context.Context, login, password string) (string, error)
+		expectedStatus int
+		expectedBody   string
 	}{
-		// TODO: Add test cases.
+		{
+			name:        "successful registration",
+			requestBody: `{"login": "user1", "password": "pass123"}`,
+			mockRegister: func(ctx context.Context, login, password string) (string, error) {
+				return "token123", nil
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:        "user already exists",
+			requestBody: `{"login": "user1", "password": "pass123"}`,
+			mockRegister: func(ctx context.Context, login, password string) (string, error) {
+				return "", service.ErrUserAlreadyExists
+			},
+			expectedStatus: http.StatusConflict,
+			expectedBody:   service.ErrUserAlreadyExists.Error() + "\n",
+		},
+		{
+			name:        "invalid request body",
+			requestBody: `invalid json`,
+			mockRegister: func(ctx context.Context, login, password string) (string, error) {
+				return "", nil
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "invalid request format\n",
+		},
+		{
+			name:        "empty login or password",
+			requestBody: `{"login": "", "password": "pass123"}`,
+			mockRegister: func(ctx context.Context, login, password string) (string, error) {
+				return "", nil
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "invalid request format\n",
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
+			service := &mockService{
+				registerFn: tt.mockRegister,
 			}
-			h.GetUserWithdrawals(tt.args.w, tt.args.r)
+
+			handler := NewHandler(service, logrus.New(), "")
+
+			req := httptest.NewRequest("POST", "/api/user/register", strings.NewReader(tt.requestBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			handler.Register(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+
+			if tt.expectedBody != "" {
+				body, _ := io.ReadAll(resp.Body)
+				if string(body) != tt.expectedBody {
+					t.Errorf("expected body %q, got %q", tt.expectedBody, string(body))
+				}
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				authHeader := resp.Header.Get("Authorization")
+				if authHeader != "Bearer token123" {
+					t.Errorf("expected Authorization header 'Bearer token123', got %q", authHeader)
+				}
+			}
 		})
 	}
 }
 
 func TestHandler_Login(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name           string
+		requestBody    string
+		mockLogin      func(ctx context.Context, login, password string) (string, error)
+		expectedStatus int
+		expectedBody   string
 	}{
-		// TODO: Add test cases.
+		{
+			name:        "successful login",
+			requestBody: `{"login": "user1", "password": "pass123"}`,
+			mockLogin: func(ctx context.Context, login, password string) (string, error) {
+				return "token123", nil
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:        "invalid credentials",
+			requestBody: `{"login": "user1", "password": "wrongpass"}`,
+			mockLogin: func(ctx context.Context, login, password string) (string, error) {
+				return "", service.ErrInvalidCredentials
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   service.ErrInvalidCredentials.Error() + "\n",
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
-			}
-			h.Login(tt.args.w, tt.args.r)
-		})
-	}
-}
 
-func TestHandler_Register(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
+			service := &mockService{
+				loginFn: tt.mockLogin,
 			}
-			h.Register(tt.args.w, tt.args.r)
+
+			handler := NewHandler(service, logrus.New(), "")
+
+			req := httptest.NewRequest("POST", "/api/user/login", strings.NewReader(tt.requestBody))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			handler.Login(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
+			}
+
+			if tt.expectedBody != "" {
+				body, _ := io.ReadAll(resp.Body)
+				if string(body) != tt.expectedBody {
+					t.Errorf("expected body %q, got %q", tt.expectedBody, string(body))
+				}
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				authHeader := resp.Header.Get("Authorization")
+				if authHeader != "Bearer token123" {
+					t.Errorf("expected Authorization header 'Bearer token123', got %q", authHeader)
+				}
+			}
 		})
 	}
 }
 
 func TestHandler_UploadOrder(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name            string
+		contentType     string
+		orderNumber     string
+		mockUploadOrder func(ctx context.Context, userID int, orderNumber string) error
+		expectedStatus  int
+		expectedBody    string
 	}{
-		// TODO: Add test cases.
+		{
+			name:        "successful upload",
+			contentType: "text/plain",
+			orderNumber: "1234567890",
+			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
+				return nil
+			},
+			expectedStatus: http.StatusAccepted,
+		},
+		{
+			name:        "invalid content type",
+			contentType: "application/json",
+			orderNumber: "1234567890",
+			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
+				return nil
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody:   "invalid request format\n",
+		},
+		{
+			name:        "order already uploaded by user",
+			contentType: "text/plain",
+			orderNumber: "1234567890",
+			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
+				return service.ErrOrderAlreadyUploadedByUser
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:        "order already uploaded by another user",
+			contentType: "text/plain",
+			orderNumber: "1234567890",
+			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
+				return service.ErrOrderAlreadyUploadedByAnotherUser
+			},
+			expectedStatus: http.StatusConflict,
+			expectedBody:   service.ErrOrderAlreadyUploadedByAnotherUser.Error() + "\n",
+		},
+		{
+			name:        "invalid order number",
+			contentType: "text/plain",
+			orderNumber: "invalid",
+			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
+				return service.ErrInvalidOrderNumber
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedBody:   service.ErrInvalidOrderNumber.Error() + "\n",
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
-			}
-			h.UploadOrder(tt.args.w, tt.args.r)
-		})
-	}
-}
 
-func TestHandler_Withdraw(t *testing.T) {
-	type fields struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	type args struct {
-		w http.ResponseWriter
-		r *http.Request
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-	}{
-		// TODO: Add test cases.
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &Handler{
-				service: tt.fields.service,
-				logger:  tt.fields.logger,
-				dbURL:   tt.fields.dbURL,
+			service := &mockService{
+				uploadOrderFn: tt.mockUploadOrder,
+				validateTokenFn: func(tokenString string) (string, error) {
+					return "user1", nil
+				},
+				getUserByLoginFn: func(ctx context.Context, login string) (models.User, error) {
+					return models.User{ID: 1}, nil
+				},
 			}
-			h.Withdraw(tt.args.w, tt.args.r)
-		})
-	}
-}
 
-func TestNewHandler(t *testing.T) {
-	type args struct {
-		service interfaces.Service
-		logger  *logrus.Logger
-		dbURL   string
-	}
-	tests := []struct {
-		name string
-		args args
-		want *Handler
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewHandler(tt.args.service, tt.args.logger, tt.args.dbURL); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewHandler() = %v, want %v", got, tt.want)
+			handler := NewHandler(service, logrus.New(), "")
+
+			req := httptest.NewRequest("POST", "/api/user/orders", strings.NewReader(tt.orderNumber))
+			req.Header.Set("Content-Type", tt.contentType)
+			// Добавляем userID в контекст как это делает middleware
+			ctx := context.WithValue(req.Context(), "userID", 1)
+			req = req.WithContext(ctx)
+
+			w := httptest.NewRecorder()
+
+			handler.UploadOrder(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
 			}
-		})
-	}
-}
 
-func TestNewRouter(t *testing.T) {
-	type args struct {
-		logger *logrus.Logger
-	}
-	tests := []struct {
-		name string
-		args args
-		want *Router
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewRouter(tt.args.logger); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewRouter() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNewServer(t *testing.T) {
-	type args struct {
-		cfg     *config.ServerConfig
-		service interfaces.Service
-		logger  *logrus.Logger
-	}
-	tests := []struct {
-		name string
-		args args
-		want *Server
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewServer(tt.args.cfg, tt.args.service, tt.args.logger); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewServer() = %v, want %v", got, tt.want)
+			if tt.expectedBody != "" {
+				body, _ := io.ReadAll(resp.Body)
+				if string(body) != tt.expectedBody {
+					t.Errorf("expected body %q, got %q", tt.expectedBody, string(body))
+				}
 			}
 		})
 	}
 }
 
-func TestRouter_SetupRoutes(t *testing.T) {
-	type fields struct {
-		Router chi.Router
-		logger *logrus.Logger
-	}
-	type args struct {
-		handler *Handler
-	}
+func TestHandler_GetUserOrders(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name              string
+		mockGetUserOrders func(ctx context.Context, userID int) ([]models.Order, error)
+		expectedStatus    int
+		expectedBody      string
 	}{
-		// TODO: Add test cases.
+		{
+			name: "successful get orders",
+			mockGetUserOrders: func(ctx context.Context, userID int) ([]models.Order, error) {
+				return []models.Order{
+					{
+						Number:     "1234567890",
+						Status:     models.OrderStatusProcessed,
+						Accrual:    100.5,
+						UploadedAt: now,
+					},
+				}, nil
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: `[{"number":"1234567890","status":"PROCESSED","accrual":100.5,"uploaded_at":"` + now.Format(time.RFC3339Nano) + `"}]
+`,
+		},
+		{
+			name: "no orders",
+			mockGetUserOrders: func(ctx context.Context, userID int) ([]models.Order, error) {
+				return []models.Order{}, nil
+			},
+			expectedStatus: http.StatusNoContent,
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := &Router{
-				Router: tt.fields.Router,
-				logger: tt.fields.logger,
-			}
-			r.SetupRoutes(tt.args.handler)
-		})
-	}
-}
 
-func TestServer_Shutdown(t *testing.T) {
-	type fields struct {
-		cfg     *config.ServerConfig
-		router  *Router
-		service interfaces.Service
-		server  *http.Server
-		logger  *logrus.Logger
-	}
-	type args struct {
-		ctx context.Context
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{
-				cfg:     tt.fields.cfg,
-				router:  tt.fields.router,
-				service: tt.fields.service,
-				server:  tt.fields.server,
-				logger:  tt.fields.logger,
+			service := &mockService{
+				getUserOrdersFn: tt.mockGetUserOrders,
+				validateTokenFn: func(tokenString string) (string, error) {
+					return "user1", nil
+				},
+				getUserByLoginFn: func(ctx context.Context, login string) (models.User, error) {
+					return models.User{ID: 1}, nil
+				},
 			}
-			if err := s.Shutdown(tt.args.ctx); (err != nil) != tt.wantErr {
-				t.Errorf("Shutdown() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
 
-func TestServer_Start(t *testing.T) {
-	type fields struct {
-		cfg     *config.ServerConfig
-		router  *Router
-		service interfaces.Service
-		server  *http.Server
-		logger  *logrus.Logger
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Server{
-				cfg:     tt.fields.cfg,
-				router:  tt.fields.router,
-				service: tt.fields.service,
-				server:  tt.fields.server,
-				logger:  tt.fields.logger,
+			handler := NewHandler(service, logrus.New(), "")
+
+			req := httptest.NewRequest("GET", "/api/user/orders", nil)
+			// Добавляем userID в контекст как это делает middleware
+			ctx := context.WithValue(req.Context(), "userID", 1)
+			req = req.WithContext(ctx)
+
+			w := httptest.NewRecorder()
+
+			handler.GetUserOrders(w, req)
+
+			resp := w.Result()
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
 			}
-			if err := s.Start(); (err != nil) != tt.wantErr {
-				t.Errorf("Start() error = %v, wantErr %v", err, tt.wantErr)
+
+			if tt.expectedBody != "" {
+				body, _ := io.ReadAll(resp.Body)
+				if string(body) != tt.expectedBody {
+					t.Errorf("expected body %q, got %q", tt.expectedBody, string(body))
+				}
 			}
 		})
 	}
