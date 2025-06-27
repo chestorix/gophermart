@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"net/http"
+	"strings"
 )
 
 func Auth(authService interfaces.Service) func(http.Handler) http.Handler {
@@ -13,6 +14,9 @@ func Auth(authService interfaces.Service) func(http.Handler) http.Handler {
 			if token == "" {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
+			}
+			if strings.HasPrefix(token, "Bearer") {
+				token = strings.TrimPrefix(token, "Bearer")
 			}
 
 			login, err := authService.ValidateToken(token)
