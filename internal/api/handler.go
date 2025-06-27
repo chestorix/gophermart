@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/chestorix/gophermart/internal/api/middleware"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
 	"github.com/chestorix/gophermart/internal/service"
@@ -97,7 +98,7 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "text/plain" {
 		http.Error(w, "invalid request format", http.StatusBadRequest)
 	}
-	userID := r.Context().Value("userID").(int)
+	userID := r.Context().Value(middleware.UserIDKey).(int)
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -128,7 +129,7 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(int)
+	userID := r.Context().Value(middleware.UserIDKey).(int)
 	orders, err := h.service.GetUserOrders(r.Context(), userID)
 	if err != nil {
 		h.logger.Errorf("get user orders failed: %v", err)
@@ -164,7 +165,7 @@ func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(int)
+	userID := r.Context().Value(middleware.UserIDKey).(int)
 	current, withdrawn, err := h.service.GetUserBalance(r.Context(), userID)
 	if err != nil {
 		h.logger.Errorf("get user balance failed: %v", err)
@@ -188,7 +189,7 @@ func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(int)
+	userID := r.Context().Value(middleware.UserIDKey).(int)
 
 	var req struct {
 		Order string  `json:"order"`
@@ -213,7 +214,7 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Handler) GetUserWithdrawals(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(int)
+	userID := r.Context().Value(middleware.UserIDKey).(int)
 
 	withdrawals, err := h.service.GetUserWithdrawals(r.Context(), userID)
 	if err != nil {

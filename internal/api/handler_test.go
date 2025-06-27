@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"github.com/chestorix/gophermart/internal/api/middleware"
 	"github.com/chestorix/gophermart/internal/models"
 	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
@@ -288,8 +289,8 @@ func TestHandler_UploadOrder(t *testing.T) {
 
 			req := httptest.NewRequest("POST", "/api/user/orders", strings.NewReader(tt.orderNumber))
 			req.Header.Set("Content-Type", tt.contentType)
-			// Добавляем userID в контекст как это делает middleware
-			ctx := context.WithValue(req.Context(), "userID", 1)
+
+			ctx := context.WithValue(req.Context(), middleware.UserIDKey, 1)
 			req = req.WithContext(ctx)
 
 			w := httptest.NewRecorder()
@@ -361,8 +362,8 @@ func TestHandler_GetUserOrders(t *testing.T) {
 			handler := NewHandler(service, logrus.New(), "")
 
 			req := httptest.NewRequest("GET", "/api/user/orders", nil)
-			// Добавляем userID в контекст как это делает middleware
-			ctx := context.WithValue(req.Context(), "userID", 1)
+
+			ctx := context.WithValue(req.Context(), middleware.UserIDKey, 1)
 			req = req.WithContext(ctx)
 
 			w := httptest.NewRecorder()
