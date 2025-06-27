@@ -245,7 +245,7 @@ func (p *Postgres) GetUserBalance(ctx context.Context, userID int) (current, wit
 
 }
 
-func (r *Postgres) GetOrdersToProcess(ctx context.Context, limit int) ([]models.Order, error) {
+func (p *Postgres) GetOrdersToProcess(ctx context.Context, limit int) ([]models.Order, error) {
 	query := `
 		SELECT number, user_id, status, accrual, uploaded_at
 		FROM orders
@@ -254,7 +254,7 @@ func (r *Postgres) GetOrdersToProcess(ctx context.Context, limit int) ([]models.
 		LIMIT $1
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, limit)
+	rows, err := p.db.QueryContext(ctx, query, limit)
 	if err != nil {
 		return nil, err
 	}
