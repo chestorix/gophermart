@@ -18,7 +18,7 @@ func Auth(authService interfaces.Service) func(http.Handler) http.Handler {
 			}
 			fmt.Println("token ", token)
 			if strings.HasPrefix(token, "Bearer") {
-				token = strings.TrimPrefix(token, "Bearer")
+				token = strings.TrimPrefix(token, "Bearer ")
 			}
 
 			login, err := authService.ValidateToken(token)
