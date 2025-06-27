@@ -22,7 +22,7 @@ func main() {
 	logger.SetLevel(logrus.InfoLevel)
 
 	cfg := config.Load()
-	storage, err := repository.NewPostgres(cfg.DbURL)
+	storage, err := repository.NewPostgres(cfg.DBURI)
 	if err != nil {
 		logger.Fatal(err)
 	}

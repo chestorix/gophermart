@@ -28,7 +28,7 @@ func NewServer(cfg *config.ServerConfig, service interfaces.Service, logger *log
 
 func (s *Server) Start() error {
 	s.logger.Info("Starting server...")
-	s.router.SetupRoutes(NewHandler(s.service, s.logger, s.cfg.DbURL))
+	s.router.SetupRoutes(NewHandler(s.service, s.logger, s.cfg.DBURI))
 	httpServer := &http.Server{
 		Addr:    s.cfg.RunAddress,
 		Handler: s.router,
