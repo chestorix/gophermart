@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"net/http"
 	"strings"
@@ -15,6 +16,7 @@ func Auth(authService interfaces.Service) func(http.Handler) http.Handler {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
+			fmt.Println("token ", token)
 			if strings.HasPrefix(token, "Bearer") {
 				token = strings.TrimPrefix(token, "Bearer")
 			}
