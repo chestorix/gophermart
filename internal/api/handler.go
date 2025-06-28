@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chestorix/gophermart/internal/api/middleware"
+	e "github.com/chestorix/gophermart/internal/errors"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
-	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -50,7 +50,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	token, err := h.service.Register(r.Context(), req.Login, req.Password)
 	if err != nil {
 		switch err {
-		case service.ErrUserAlreadyExists:
+		case e.ErrUserAlreadyExists:
 			http.Error(w, err.Error(), http.StatusConflict)
 		default:
 			h.logger.Errorf("registration failed: %v", err)
@@ -81,7 +81,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.service.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
 		switch err {
-		case service.ErrInvalidCredentials:
+		case e.ErrInvalidCredentials:
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 		default:
 			h.logger.Errorf("login failed: %v", err)
@@ -117,11 +117,11 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	switch err {
 	case nil:
 		w.WriteHeader(http.StatusAccepted)
-	case service.ErrOrderAlreadyUploadedByUser:
+	case e.ErrOrderAlreadyUploadedByUser:
 		w.WriteHeader(http.StatusOK)
-	case service.ErrOrderAlreadyUploadedByAnotherUser:
+	case e.ErrOrderAlreadyUploadedByAnotherUser:
 		http.Error(w, err.Error(), http.StatusConflict)
-	case service.ErrInvalidOrderNumber:
+	case e.ErrInvalidOrderNumber:
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		h.logger.Errorf("upload order failed: %v", err)
@@ -204,9 +204,9 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	switch err {
 	case nil:
 		w.WriteHeader(http.StatusOK)
-	case service.ErrInsufficientFunds:
+	case e.ErrInsufficientFunds:
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
-	case service.ErrInvalidOrderNumber:
+	case e.ErrInvalidOrderNumber:
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		h.logger.Errorf("withdraw failed: %v", err)

@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
+	e "github.com/chestorix/gophermart/internal/errors"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
 	"github.com/golang-jwt/jwt/v4"
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var (
+/*var (
 	ErrUserAlreadyExists                 = errors.New("user already exists")
 	ErrInvalidCredentials                = errors.New("invalid credentials")
 	ErrOrderAlreadyUploadedByUser        = errors.New("order already uploaded by user")
@@ -22,7 +22,7 @@ var (
 	ErrInvalidOrderNumber                = errors.New("invalid order number")
 	ErrInsufficientFunds                 = errors.New("insufficient funds")
 	ErrOrderNotRegistered                = errors.New("order not registered")
-)
+)*/
 
 type Service struct {
 	httpClient *http.Client
@@ -52,7 +52,7 @@ func (s *Service) Register(ctx context.Context, login, password string) (string,
 
 	_, err := s.repo.GetUserByLogin(ctx, login)
 	if err == nil {
-		return "", ErrUserAlreadyExists
+		return "", e.ErrUserAlreadyExists
 	}
 
 	hashedPassword, err := s.hashPassword(password)
@@ -80,10 +80,10 @@ func (s *Service) Register(ctx context.Context, login, password string) (string,
 func (s *Service) Login(ctx context.Context, login, password string) (string, error) {
 	user, err := s.repo.GetUserByLogin(ctx, login)
 	if err != nil {
-		return "", ErrInvalidCredentials
+		return "", e.ErrInvalidCredentials
 	}
 	if err := s.comparePassword(user.PasswordHash, password); err != nil {
-		return "", ErrInvalidCredentials
+		return "", e.ErrInvalidCredentials
 	}
 
 	return s.generateToken(login)
@@ -103,15 +103,15 @@ func (s *Service) GetUserBalance(ctx context.Context, userID int) (current, with
 
 func (s *Service) UploadOrder(ctx context.Context, userID int, orderNumber string) error {
 	if !isValidLuhn(orderNumber) {
-		return ErrInvalidOrderNumber
+		return e.ErrInvalidOrderNumber
 	}
 
 	existingOrder, err := s.repo.GetOrderByNumber(ctx, orderNumber)
 	if err == nil {
 		if existingOrder.UserID == userID {
-			return ErrOrderAlreadyUploadedByUser
+			return e.ErrOrderAlreadyUploadedByUser
 		}
-		return ErrOrderAlreadyUploadedByAnotherUser
+		return e.ErrOrderAlreadyUploadedByAnotherUser
 	}
 
 	order := models.Order{
@@ -135,11 +135,11 @@ func (s *Service) Withdraw(ctx context.Context, userID int, orderNumber string, 
 	}
 
 	if current < sum {
-		return ErrInsufficientFunds
+		return e.ErrInsufficientFunds
 	}
 
 	if !isValidLuhn(orderNumber) {
-		return ErrInvalidOrderNumber
+		return e.ErrInvalidOrderNumber
 	}
 
 	withdrawal := models.Withdrawal{
@@ -214,7 +214,7 @@ func (s *Service) GetAccrual(ctx context.Context, orderNumber string) (AccrualRe
 		}
 		return accrualResp, nil
 	case http.StatusNoContent:
-		return AccrualResponse{}, ErrOrderNotRegistered
+		return AccrualResponse{}, e.ErrOrderNotRegistered
 	case http.StatusTooManyRequests:
 		retryAfter := resp.Header.Get("Retry-After")
 		return AccrualResponse{}, fmt.Errorf("rate limit exceeded, retry after %s", retryAfter)
@@ -243,7 +243,7 @@ func (s *Service) comparePassword(hashedPassword, password string) error {
 func (s *Service) ValidateToken(tokenString string) (string, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+			return nil, e.ErrUnexpectedSignMethod
 		}
 		return []byte(s.jwtSecret), nil
 	})
@@ -255,12 +255,12 @@ func (s *Service) ValidateToken(tokenString string) (string, error) {
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		login, ok := claims["login"].(string)
 		if !ok {
-			return "", errors.New("invalid token claims")
+			return "", e.ErrInvalidTokenClaim
 		}
 		return login, nil
 	}
 
-	return "", errors.New("invalid token")
+	return "", e.ErrInvalidToken
 }
 
 func isValidLuhn(number string) bool {
