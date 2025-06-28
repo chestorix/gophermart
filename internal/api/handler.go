@@ -98,7 +98,11 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "text/plain" {
 		http.Error(w, "invalid request format", http.StatusBadRequest)
 	}
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -129,7 +133,11 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	orders, err := h.service.GetUserOrders(r.Context(), userID)
 	if err != nil {
 		h.logger.Errorf("get user orders failed: %v", err)
@@ -165,7 +173,12 @@ func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	current, withdrawn, err := h.service.GetUserBalance(r.Context(), userID)
 	if err != nil {
 		h.logger.Errorf("get user balance failed: %v", err)
@@ -189,7 +202,11 @@ func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		Order string  `json:"order"`
@@ -214,7 +231,11 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Handler) GetUserWithdrawals(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	withdrawals, err := h.service.GetUserWithdrawals(r.Context(), userID)
 	if err != nil {

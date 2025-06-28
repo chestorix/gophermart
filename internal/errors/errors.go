@@ -10,8 +10,7 @@ var (
 	ErrInvalidOrderNumber                = errors.New("invalid order number")
 	ErrInsufficientFunds                 = errors.New("insufficient funds")
 	ErrOrderNotRegistered                = errors.New("order not registered")
-
-	ErrInvalidTokenClaim    = errors.New("invalid token claim")
-	ErrInvalidToken         = errors.New("invalid token")
-	ErrUnexpectedSignMethod = errors.New("unexpected signing method")
+	ErrInvalidTokenClaim                 = errors.New("invalid token claim")
+	ErrInvalidToken                      = errors.New("invalid token")
+	ErrUnexpectedSignMethod              = errors.New("unexpected signing method")
 )
