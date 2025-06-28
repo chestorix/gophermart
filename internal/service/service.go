@@ -162,29 +162,41 @@ func (s *Service) ProcessOrders(ctx context.Context) error {
 	}
 
 	for _, order := range orders {
-		accrualResp, err := s.GetAccrual(ctx, order.Number)
-		if err != nil {
-			s.logger.Errorf("failed to get accrual for order %s: %v", order.Number, err)
-			continue
-		}
+		maxRetries := 3
+		for i := 0; i < maxRetries; i++ {
+			accrualResp, err := s.GetAccrual(ctx, order.Number)
+			if err != nil {
+				if i == maxRetries-1 {
+					s.logger.Errorf("failed to get accrual for order %s after %d retries: %v",
+						order.Number, maxRetries, err)
 
-		switch accrualResp.Status {
-		case models.AccrualStatusRegistered:
-			order.Status = models.OrderStatusNew
-			order.Accrual = accrualResp.Accrual
-		case models.AccrualStatusProcessing:
-			order.Status = models.OrderStatusProcessing
-			order.Accrual = accrualResp.Accrual
-		case models.AccrualStatusProcessed:
-			order.Status = models.OrderStatusProcessed
-			order.Accrual = accrualResp.Accrual
-		case models.AccrualStatusInvalid:
-			order.Status = models.OrderStatusInvalid
-			order.Accrual = accrualResp.Accrual
+					order.Status = models.OrderStatusInvalid
+					break
+				}
+				time.Sleep(time.Second * time.Duration(i+1))
+				continue
+			}
+
+			switch accrualResp.Status {
+			case models.AccrualStatusRegistered:
+				order.Status = models.OrderStatusNew
+			case models.AccrualStatusProcessing:
+				order.Status = models.OrderStatusProcessing
+			case models.AccrualStatusProcessed:
+				order.Status = models.OrderStatusProcessed
+				order.Accrual = accrualResp.Accrual
+			case models.AccrualStatusInvalid:
+				order.Status = models.OrderStatusInvalid
+			}
+			break
 		}
 
 		if err := s.repo.UpdateOrder(ctx, order); err != nil {
 			s.logger.Errorf("failed to update order %s: %v", order.Number, err)
+
+			time.AfterFunc(5*time.Minute, func() {
+				s.ProcessOrders(context.Background())
+			})
 		}
 	}
 
