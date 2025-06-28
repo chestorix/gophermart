@@ -25,7 +25,7 @@ import (
 )*/
 
 type Service struct {
-	httpClient *http.Client
+	httpClient *resty.Client
 	repo       interfaces.Repository
 	logger     *logrus.Logger
 	jwtSecret  string
@@ -40,7 +40,7 @@ type AccrualResponse struct {
 
 func NewService(repo interfaces.Repository, logger *logrus.Logger, jwtSecret string, AccSysAddr string) *Service {
 	return &Service{
-		httpClient: &http.Client{},
+		httpClient: &resty.Client{},
 		repo:       repo,
 		logger:     logger,
 		jwtSecret:  jwtSecret,
@@ -204,11 +204,11 @@ func (s *Service) ProcessOrders(ctx context.Context) error {
 }
 
 func (s *Service) GetAccrual(ctx context.Context, orderNumber string) (AccrualResponse, error) {
-	client := resty.New()
+
 	url := fmt.Sprintf("%s/api/orders/%s", s.accSysAddr, orderNumber)
 
 	var accrualResp AccrualResponse
-	resp, err := client.R().
+	resp, err := s.httpClient.R().
 		SetContext(ctx).
 		SetResult(&accrualResp).
 		Get(url)
