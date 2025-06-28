@@ -2,11 +2,11 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	e "github.com/chestorix/gophermart/internal/errors"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
+	"github.com/go-resty/resty/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
@@ -192,34 +192,29 @@ func (s *Service) ProcessOrders(ctx context.Context) error {
 }
 
 func (s *Service) GetAccrual(ctx context.Context, orderNumber string) (AccrualResponse, error) {
+	client := resty.New()
 	url := fmt.Sprintf("%s/api/orders/%s", s.accSysAddr, orderNumber)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	var accrualResp AccrualResponse
+	resp, err := client.R().
+		SetContext(ctx).
+		SetResult(&accrualResp).
+		Get(url)
+
 	if err != nil {
 		return AccrualResponse{}, err
 	}
 
-	resp, err := s.httpClient.Do(req)
-	s.logger.Infoln(url)
-	if err != nil {
-		return AccrualResponse{}, err
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case http.StatusOK:
-		var accrualResp AccrualResponse
-		if err := json.NewDecoder(resp.Body).Decode(&accrualResp); err != nil {
-			return AccrualResponse{}, err
-		}
 		return accrualResp, nil
 	case http.StatusNoContent:
 		return AccrualResponse{}, e.ErrOrderNotRegistered
 	case http.StatusTooManyRequests:
-		retryAfter := resp.Header.Get("Retry-After")
+		retryAfter := resp.Header().Get("Retry-After")
 		return AccrualResponse{}, fmt.Errorf("rate limit exceeded, retry after %s", retryAfter)
 	default:
-		return AccrualResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return AccrualResponse{}, fmt.Errorf("unexpected status code: %d", resp.StatusCode())
 	}
 }
 
