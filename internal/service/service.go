@@ -40,7 +40,7 @@ type AccrualResponse struct {
 
 func NewService(repo interfaces.Repository, logger *logrus.Logger, jwtSecret string, AccSysAddr string) *Service {
 	return &Service{
-		httpClient: &resty.Client{},
+		httpClient: resty.New(),
 		repo:       repo,
 		logger:     logger,
 		jwtSecret:  jwtSecret,
