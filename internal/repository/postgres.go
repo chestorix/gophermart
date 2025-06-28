@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS orders (
     number VARCHAR(255) PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id),
-    status VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('NEW', 'PROCESSING', 'INVALID', 'PROCESSED')),
     accrual NUMERIC(10, 2) DEFAULT 0,
     uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
@@ -222,27 +222,18 @@ func (p *Postgres) GetWithdrawalsByUserID(ctx context.Context, userID int) ([]mo
 }
 
 func (p *Postgres) GetUserBalance(ctx context.Context, userID int) (current, withdrawn float64, err error) {
-	queryCurrent := `
-		SELECT COALESCE(SUM(accrual), 0)
-		FROM orders 
-		WHERE user_id = $1 AND status = $2
-	`
-	err = p.db.QueryRowContext(ctx, queryCurrent, userID, models.OrderStatusProcessed).Scan(&current)
-	if err != nil {
-		return 0, 0, err
-	}
-	queryWithdrawn := `
-		SELECT COALESCE(SUM(sum), 0)
-		FROM withdrawals 
-		WHERE user_id = $1
-	`
-	err = p.db.QueryRowContext(ctx, queryWithdrawn, userID).Scan(&withdrawn)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	return current - withdrawn, withdrawn, nil
-
+	query := `
+        SELECT 
+            COALESCE(SUM(CASE WHEN o.status = $2 THEN o.accrual ELSE 0 END), 0) as current,
+            COALESCE(SUM(w.sum), 0) as withdrawn
+        FROM users u
+        LEFT JOIN orders o ON o.user_id = u.id
+        LEFT JOIN withdrawals w ON w.user_id = u.id
+        WHERE u.id = $1
+        GROUP BY u.id
+    `
+	err = p.db.QueryRowContext(ctx, query, userID, models.OrderStatusProcessed).Scan(&current, &withdrawn)
+	return current - withdrawn, withdrawn, err
 }
 
 func (p *Postgres) GetOrdersToProcess(ctx context.Context, limit int) ([]models.Order, error) {

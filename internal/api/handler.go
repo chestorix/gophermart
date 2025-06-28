@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/chestorix/gophermart/internal/api/middleware"
+	e "github.com/chestorix/gophermart/internal/errors"
 	"github.com/chestorix/gophermart/internal/interfaces"
 	"github.com/chestorix/gophermart/internal/models"
-	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -50,7 +50,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	token, err := h.service.Register(r.Context(), req.Login, req.Password)
 	if err != nil {
 		switch err {
-		case service.ErrUserAlreadyExists:
+		case e.ErrUserAlreadyExists:
 			http.Error(w, err.Error(), http.StatusConflict)
 		default:
 			h.logger.Errorf("registration failed: %v", err)
@@ -81,7 +81,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.service.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
 		switch err {
-		case service.ErrInvalidCredentials:
+		case e.ErrInvalidCredentials:
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 		default:
 			h.logger.Errorf("login failed: %v", err)
@@ -98,7 +98,11 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "text/plain" {
 		http.Error(w, "invalid request format", http.StatusBadRequest)
 	}
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -117,11 +121,11 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	switch err {
 	case nil:
 		w.WriteHeader(http.StatusAccepted)
-	case service.ErrOrderAlreadyUploadedByUser:
+	case e.ErrOrderAlreadyUploadedByUser:
 		w.WriteHeader(http.StatusOK)
-	case service.ErrOrderAlreadyUploadedByAnotherUser:
+	case e.ErrOrderAlreadyUploadedByAnotherUser:
 		http.Error(w, err.Error(), http.StatusConflict)
-	case service.ErrInvalidOrderNumber:
+	case e.ErrInvalidOrderNumber:
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		h.logger.Errorf("upload order failed: %v", err)
@@ -129,7 +133,11 @@ func (h *Handler) UploadOrder(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	orders, err := h.service.GetUserOrders(r.Context(), userID)
 	if err != nil {
 		h.logger.Errorf("get user orders failed: %v", err)
@@ -165,7 +173,12 @@ func (h *Handler) GetUserOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	current, withdrawn, err := h.service.GetUserBalance(r.Context(), userID)
 	if err != nil {
 		h.logger.Errorf("get user balance failed: %v", err)
@@ -189,7 +202,11 @@ func (h *Handler) GetUserBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	var req struct {
 		Order string  `json:"order"`
@@ -204,9 +221,9 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	switch err {
 	case nil:
 		w.WriteHeader(http.StatusOK)
-	case service.ErrInsufficientFunds:
+	case e.ErrInsufficientFunds:
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
-	case service.ErrInvalidOrderNumber:
+	case e.ErrInvalidOrderNumber:
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		h.logger.Errorf("withdraw failed: %v", err)
@@ -214,7 +231,11 @@ func (h *Handler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (h *Handler) GetUserWithdrawals(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(middleware.UserIDKey).(int)
+	userID, ok := r.Context().Value(middleware.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	withdrawals, err := h.service.GetUserWithdrawals(r.Context(), userID)
 	if err != nil {

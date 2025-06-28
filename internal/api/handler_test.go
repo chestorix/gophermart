@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 	"github.com/chestorix/gophermart/internal/api/middleware"
+	e "github.com/chestorix/gophermart/internal/errors"
 	"github.com/chestorix/gophermart/internal/models"
-	"github.com/chestorix/gophermart/internal/service"
 	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
@@ -86,10 +86,10 @@ func TestHandler_Register(t *testing.T) {
 			name:        "user already exists",
 			requestBody: `{"login": "user1", "password": "pass123"}`,
 			mockRegister: func(ctx context.Context, login, password string) (string, error) {
-				return "", service.ErrUserAlreadyExists
+				return "", e.ErrUserAlreadyExists
 			},
 			expectedStatus: http.StatusConflict,
-			expectedBody:   service.ErrUserAlreadyExists.Error() + "\n",
+			expectedBody:   e.ErrUserAlreadyExists.Error() + "\n",
 		},
 		{
 			name:        "invalid request body",
@@ -169,10 +169,10 @@ func TestHandler_Login(t *testing.T) {
 			name:        "invalid credentials",
 			requestBody: `{"login": "user1", "password": "wrongpass"}`,
 			mockLogin: func(ctx context.Context, login, password string) (string, error) {
-				return "", service.ErrInvalidCredentials
+				return "", e.ErrInvalidCredentials
 			},
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   service.ErrInvalidCredentials.Error() + "\n",
+			expectedBody:   e.ErrInvalidCredentials.Error() + "\n",
 		},
 	}
 
@@ -247,7 +247,7 @@ func TestHandler_UploadOrder(t *testing.T) {
 			contentType: "text/plain",
 			orderNumber: "1234567890",
 			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
-				return service.ErrOrderAlreadyUploadedByUser
+				return e.ErrOrderAlreadyUploadedByUser
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -256,20 +256,20 @@ func TestHandler_UploadOrder(t *testing.T) {
 			contentType: "text/plain",
 			orderNumber: "1234567890",
 			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
-				return service.ErrOrderAlreadyUploadedByAnotherUser
+				return e.ErrOrderAlreadyUploadedByAnotherUser
 			},
 			expectedStatus: http.StatusConflict,
-			expectedBody:   service.ErrOrderAlreadyUploadedByAnotherUser.Error() + "\n",
+			expectedBody:   e.ErrOrderAlreadyUploadedByAnotherUser.Error() + "\n",
 		},
 		{
 			name:        "invalid order number",
 			contentType: "text/plain",
 			orderNumber: "invalid",
 			mockUploadOrder: func(ctx context.Context, userID int, orderNumber string) error {
-				return service.ErrInvalidOrderNumber
+				return e.ErrInvalidOrderNumber
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
-			expectedBody:   service.ErrInvalidOrderNumber.Error() + "\n",
+			expectedBody:   e.ErrInvalidOrderNumber.Error() + "\n",
 		},
 	}
 
